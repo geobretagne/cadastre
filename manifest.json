@@ -1,0 +1,35 @@
+{
+    "js": [
+        "js/StatusBar.js",        
+        "js/cadastre.js"
+    ],
+    "css": [
+        "css/cadastre.css"
+    ],
+    "default_options": {
+        "communes": {
+                    "requesttype": "file",
+                    "wfsurl": "http://geobretagne.fr/geoserver/geob_loc/wfs",
+                    "typename": "geob_loc:COMMUNE",
+                    "idfield": "INSE",
+                    "labelfield": "COMMUNE"
+                },
+            "parcelles": {
+                "wfsurl": "http://geobretagne.fr/geoserver/cadastre/wfs",
+                "typename": "cadastre:CP.CadastralParcel",
+                "idfield": "inspireid"               
+            },
+            "animation": false
+    },
+    "i18n": {
+        "en": {
+            "cadastre": "Cadastre"
+        },
+        "es": {
+            "cadastre": "Cadastre"
+        },
+        "fr": {
+            "cadastre": "Cadastre"
+        }
+    }
+}
