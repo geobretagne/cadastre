@@ -1,0 +1,19 @@
+[{
+    "id": "cadastre_1",
+    "name": "geob_cadastre",
+    "enabled" : "true",
+    "title": {
+        "en": "Location to a cadastral parcel",
+        "es": "Ubicacion de la trama",
+        "fr": "Localisation à la parcelle (geob)"
+    },
+    "preloaded": "true",
+    "description": {
+        "en": "Center the map on a parcel",
+        "es": "Centrar el mapa sobre una parcela",
+        "fr": "Centrer la carte sur une parcelle du PCI vecteur"
+    },
+    "options": {
+        "animation": false
+    }
+}]
