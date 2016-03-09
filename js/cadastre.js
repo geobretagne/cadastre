@@ -1,131 +1,126 @@
 Ext.namespace("GEOR.Addons");
 
-GEOR.Addons.cadastre = function (map, options) {
-    this.map = map;
-    this.options = options;
-    this.item = null;
-    this.layer = null;
-    this.win = null;
-    this.form = null;
-    this.statusbar = null;
-};
 
-GEOR.Addons.cadastre.prototype = (function () {
+GEOR.Addons.geob_cadastre = Ext.extend(GEOR.Addons.Base, {
+    item: null,
+    layer: null,
+    win: null,
+    title: null,
+    form: null,
+    statusbar: null, 
+    _communesCombo: null,
+    _freeText: null,
+    _parcelLayer: null,
+    _animationTimer: null,
+    _loop: null,
+    _mask_loader: null,
+    _communes: null,
+    _communesRequestType: null, 
 
-    /*
-     * Private     */
-
-    var _self = null;
-    var _map = null;
-    var _form = null;
-    var _communesCombo = null;
-    var _statusbar = null;
-    var _freeText = null
-    var _config = null;
-    var _win = null;
-    var _parcelLayer = null;
-    var _animationTimer = null;
-    var _loop = null;
-    var _mask_loader = null;
-    var _communes = null;
-    var _communesRequestType = null;
-
-    var requestFailure = function (response) {
+    requestFailure: function (response) {
         alert(response.responseText);
-        _mask_loader.hide();
-    };
+        this._mask_loader.hide();
+    },
 
-    var getCommunes = function () {
-        _mask_loader.show();
-        if (_communesRequestType === "file") {
+    getCommunes: function () {
+        this._mask_loader.show();
+        if (this._communesRequestType === "file") {
             OpenLayers.Request.GET({
-                url: GEOR.config.PATHNAME + '/app/addons/cadastre/communes.json',
-                failure: requestFailure,
-                success: getCommunesSuccess
+                url: GEOR.config.PATHNAME + "/ws/addons/geob_cadastre/communes.json",
+                failure: this.requestFailure,
+                success: this.getCommunesSuccess,
+                scope: this
             });
         } else {
-            var postRequest = '<wfs:GetFeature service="WFS" version="1.0.0"' + ' outputFormat="application/json"' + ' xmlns:topp="http://www.openplans.org/topp"' + ' xmlns:wfs="http://www.opengis.net/wfs"' + ' xmlns:ogc="http://www.opengis.net/ogc"' + ' xmlns:gml="http://www.opengis.net/gml"' + ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' + ' xsi:schemaLocation="http://www.opengis.net/wfs' + ' http://schemas.opengis.net/wfs/1.0.0/WFS-basic.xsd">' + ' <wfs:Query typeName="' + _config.communes.typename + '">' + ' <ogc:PropertyName>' + _config.communes.idfield + '</ogc:PropertyName> ' + ' <ogc:PropertyName>' + _config.communes.labelfield + '</ogc:PropertyName>' + ' </wfs:Query>' + ' </wfs:GetFeature>';
+            var postRequest = '<wfs:GetFeature service="WFS" version="1.0.0"' + ' outputFormat="application/json"' +
+                ' xmlns:topp="http://www.openplans.org/topp"' + ' xmlns:wfs="http://www.opengis.net/wfs"' + 
+                ' xmlns:ogc="http://www.opengis.net/ogc"' + ' xmlns:gml="http://www.opengis.net/gml"' +
+                ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' + 
+                ' xsi:schemaLocation="http://www.opengis.net/wfs' + 
+                ' http://schemas.opengis.net/wfs/1.0.0/WFS-basic.xsd">' + 
+                ' <wfs:Query typeName="' + this.options.communes.typename + '">' + 
+                ' <ogc:PropertyName>' + this.options.communes.idfield + '</ogc:PropertyName> ' + 
+                ' <ogc:PropertyName>' + this.options.communes.labelfield + '</ogc:PropertyName>' + 
+                ' </wfs:Query>' + ' </wfs:GetFeature>';
             var request = OpenLayers.Request.issue({
                 method: 'POST',
                 headers: {
                     "Content-Type": "text/xml"
                 },
-                url: _config.communes.wfsurl,
+                url: this.options.communes.wfsurl,
                 data: postRequest,
-                failure: requestFailure,
-                success: getCommunesSuccess
+                failure: this.requestFailure,
+                success: this.getCommunesSuccess,
+                scope: this
             });
         }
-    };
+    },
 
-    var getCommunesSuccess = function (response) {        
+    getCommunesSuccess: function (response) {        
         var obj= (new OpenLayers.Format.JSON()).read(response.responseText);
-        _communes.loadData(obj.features);
-        _mask_loader.hide();
-        _statusbar.setStatus({
+        this._communes.loadData(obj.features);
+        this._mask_loader.hide();
+        this.statusbar.setStatus({
             text: 'Sélectionnez une commune...',
             iconCls: 'x-status-valid',
             clear: true // auto-clear after a set interval
         });
-    };
-
-    var getParcellesSuccess = function (response) {
-        var format = new OpenLayers.Format.GML();
-        var features = format.read(response.responseText);
-        _parcelLayer.addFeatures(features);
-        for (var i = 0; i < features.length; i++) {
-            var id_region = features[i].attributes.id_region;
-            var idparcel = id_region.substring(0, 2) + "0" + id_region.substring(2, 20);
-            activeProp(idparcel, features[i].geometry);
-        }
-        _mask_loader.hide();
-    };
-
-    var getParcelle = function (idparc) {
-        _statusbar.setStatus({
+    },
+    
+    getParcelle: function (idparc) {
+        this.statusbar.setStatus({
             text: 'Recherche de la parcelle',
             iconCls: 'x-status-busy',
             clear: false // auto-clear after a set interval
         });
-        var postRequest = '<wfs:GetFeature service="WFS" version="1.1.0"' + ' outputFormat="application/json"' + ' xmlns:topp="http://www.openplans.org/topp"' + ' xmlns:wfs="http://www.opengis.net/wfs"' + ' xmlns:ogc="http://www.opengis.net/ogc"' + ' xmlns:gml="http://www.opengis.net/gml"' + ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' + ' xsi:schemaLocation="http://www.opengis.net/wfs' + ' http://schemas.opengis.net/wfs/1.1.0/WFS-basic.xsd">' + ' <wfs:Query typeName="' + _config.parcelles.typename + '" srsName="'+_map.getProjection()+'">' + ' <ogc:Filter>' + '<ogc:PropertyIsEqualTo>' + '<ogc:PropertyName>' + _config.parcelles.idfield +'</ogc:PropertyName>' + ' <ogc:Literal>' + idparc + '</ogc:Literal>' + '</ogc:PropertyIsEqualTo>' + ' </ogc:Filter>' + ' </wfs:Query>' + ' </wfs:GetFeature>';
+        var postRequest = '<wfs:GetFeature service="WFS" version="1.1.0"' + ' outputFormat="application/json"' +
+            ' xmlns:topp="http://www.openplans.org/topp"' + ' xmlns:wfs="http://www.opengis.net/wfs"' + 
+            ' xmlns:ogc="http://www.opengis.net/ogc"' + ' xmlns:gml="http://www.opengis.net/gml"' +
+            ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' + ' xsi:schemaLocation="http://www.opengis.net/wfs' +
+            ' http://schemas.opengis.net/wfs/1.1.0/WFS-basic.xsd">' + 
+            ' <wfs:Query typeName="' + this.options.parcelles.typename + '" srsName="'+this.map.getProjection()+'">' +
+            ' <ogc:Filter>' + '<ogc:PropertyIsEqualTo>' + '<ogc:PropertyName>' + this.options.parcelles.idfield +'</ogc:PropertyName>' +
+            ' <ogc:Literal>' + idparc + '</ogc:Literal>' + '</ogc:PropertyIsEqualTo>' +
+            ' </ogc:Filter>' + ' </wfs:Query>' + ' </wfs:GetFeature>';
         var request = OpenLayers.Request.issue({
             method: 'POST',
             headers: {
                 "Content-Type": "text/xml"
             },
-            url: _config.parcelles.wfsurl,
+            url: this.options.parcelles.wfsurl,
             data: postRequest,
-            failure: requestFailure,
-            success: getParcelleSuccess
+            failure: this.requestFailure,
+            success: this.getParcelleSuccess,
+            scope: this
         });
-    };
+    },
 
-    var startAnimation = function () {
-        _loop = 0;
-        _animationTimer = window.setInterval(showhide, 0.5 * 1000);
-    };
+    startAnimation: function () {
+        this._loop = 0;
+        this._animationTimer = window.setInterval(this.showhide, 0.5 * 1000);
+    },
 
-    var showhide = function () {
-        _loop += 1;
-        if (_loop < 7) {
-            _parcelLayer.setVisibility(!_parcelLayer.visibility);
+    showhide: function () {
+        this._loop += 1;
+        if (this._loop < 7) {
+            this._parcelLayer.setVisibility(!this._parcelLayer.visibility);
         } else {
-            _parcelLayer.removeAllFeatures();
-            _parcelLayer.setVisibility(true);
-            window.clearInterval(_animationTimer);
-            _animationTimer = null;
+            this._parcelLayer.removeAllFeatures();
+            this._parcelLayer.setVisibility(true);
+            window.clearInterval(this._animationTimer);
+            this._animationTimer = null;
         }
-    };
+    },
 
-    var delParcelles = function () {
-        _parcelLayer.removeAllFeatures();
-    };
+    delParcelles: function () {
+        this._parcelLayer.removeAllFeatures();
+    },
 
-    var showParcelle = function () {
-        _parcelLayer.setVisibility(true);
-    };
+    showParcelle: function () {
+        this._parcelLayer.setVisibility(true);
+    },
 
-    var analyseText = function (text) {
+    analyseText: function (text) {
         var nbchar = text.length;
         var section = "";
         var parcelle = "";
@@ -146,15 +141,15 @@ GEOR.Addons.cadastre.prototype = (function () {
             var formatparcelle = tmp1.substring(tmp1.length - 4, tmp1.length + 1);
             var tmp2 = "0000" + section;
             var formatsection = tmp2.substring(tmp2.length - 5, tmp2.length + 1);            
-            var commune = _communesCombo.getValue();
+            var commune = this._communesCombo.getValue();
             var id_region = commune + formatsection + formatparcelle;
-            getParcelle("FR"+id_region);
+            this.getParcelle("FR"+id_region);
         } else {
             alert("la saisie : " + text + " n'est pas valide");
         }
-    };
+    },
 
-    var getParcelleSuccess = function (response) {
+    getParcelleSuccess: function (response) {
         var obj = (new OpenLayers.Format.JSON()).read(response.responseText);
         var nbparc = obj.features.length;
         if (nbparc > 0) {
@@ -164,30 +159,30 @@ GEOR.Addons.cadastre.prototype = (function () {
                 var geom = OpenLayers.Format.GeoJSON.prototype.parseGeometry(obj.features[i].geometry);
                 features.push(new OpenLayers.Feature.Vector(geom));                
             }
-            _parcelLayer.addFeatures(features);
-            _map.zoomToExtent(_parcelLayer.getDataExtent());
-            _map.zoomTo(18);
-            if (_config.animation === true) {
-                startAnimation();
+            this._parcelLayer.addFeatures(features);
+            this.map.zoomToExtent(this._parcelLayer.getDataExtent());
+            this.map.zoomTo(18);
+            if (this.options.animation === true) {
+                this.startAnimation();
             } else {
-                showParcelle();
+                this.showParcelle();
             }
-            _statusbar.setStatus({
+            this.statusbar.setStatus({
                 text: 'Parcelle(s) localisée(s)',
                 iconCls: 'x-status-valid',
                 clear: true // auto-clear after a set interval
             });
         } else {
-            _statusbar.setStatus({
+            this.statusbar.setStatus({
                 text: 'Pas de parcelle trouvée',
                 iconCls: 'x-status-error',
                 clear: true // auto-clear after a set interval
             });
         }
-    };
+    },
 
-    var createForm = function () {
-        _freeText = new Ext.form.TextField({
+    createForm: function () {
+        this._freeText = new Ext.form.TextField({
             //id:'freetext',
             width: 190,
             fieldLabel: "Parcelle",
@@ -196,36 +191,35 @@ GEOR.Addons.cadastre.prototype = (function () {
             listeners: {
                 specialkey: function (f, e) {
                     if (f.getValue() && e.getKey() == e.ENTER) {
-                        analyseText(f.getValue().toUpperCase());
+                        this.analyseText(f.getValue().toUpperCase());
                     }
-                }
-            }
+                },
+                scope: this
+            }            
         });
-        _communesCombo = new Ext.form.ComboBox({
-            fieldLabel: "Communes",
-            //id: 'cbcom',
+        this._communesCombo = new Ext.form.ComboBox({
+            fieldLabel: "Communes",            
             width: 190,
-            store: _communes,
-            valueField: _config.communes.idfield,
-            displayField: _config.communes.labelfield,
+            store: this._communes,
+            valueField: this.options.communes.idfield,
+            displayField: this.options.communes.labelfield,
             editable: true,
             mode: 'local',
             triggerAction: 'all',
             listeners: {
-                'select': function () {
-                    //getSections();
-                    _freeText.setDisabled(false);
-                    _freeText.focus('', 50);
-                    _freeText.setValue(null);
-                    Ext.fly(_freeText.getEl()).frame("ff0000");
+                'select': function () {                    
+                    this._freeText.setDisabled(false);
+                    this._freeText.focus('', 50);
+                    this._freeText.setValue(null);
+                    Ext.fly(this._freeText.getEl()).frame("ff0000");
                 },
+                scope: this,
                 specialkey: function (f, e) {
                     if (e.getKey() == e.ENTER) {
-                        _freeText.focus('', 50);
+                        this._freeText.focus('', 50);
                     }
                 }
             }
-            //,listWidth: 167
         });
         
         var spacer ={ xtype: 'spacer',  height: 10};
@@ -234,103 +228,93 @@ GEOR.Addons.cadastre.prototype = (function () {
             layout: 'form',
             bodyStyle: 'padding: 30px 10px 10px 10px',            
             height: 130,
-            items: [_communesCombo,spacer, _freeText]
+            items: [this._communesCombo, spacer, this._freeText]
         });
 
-        _self.form = cadastreForm;
+        this.form = cadastreForm;
         return cadastreForm;
-    };
+    },
 
-    var showForm = function () {
-        if (_form) {
-            _form.destroy();
+    showForm: function () {
+        if (this.form) {
+            this.form.destroy();
         }
-        if (_win) {
-            _win.close();
-            _win.destroy();
+        if (this.win) {
+            this.win.close();
+            this.win.destroy();
         }
 
-        _form = createForm();
-        _statusbar = new Ext.ux.StatusBar({            
+        this.form = this.createForm();
+        this.statusbar = new Ext.ux.StatusBar({            
             defaultText: '',
             defaultIconCls: 'x-status-saved',
             items: [{
                 text: 'Localisation',
-                handler: function () {
-                    //getParcelle();
-                    analyseText(_freeText.getValue().toUpperCase());
-                }
+                handler: function () {                    
+                    this.analyseText(this._freeText.getValue().toUpperCase());
+                },
+                scope: this
             }, {
                 text: 'effacer',
                 tooltip: 'effacer les parcelles localisées',
-                hidden: _config.animation,
+                hidden: this.options.animation,
                 handler: function () {
-                    delParcelles();
-                }
+                    this.delParcelles();
+                },
+                scope: this
             }]
         });
-        _self.statusbar = _statusbar;
-
-        _win = new Ext.Window({
+       
+        this.win = new Ext.Window({
             closable: true,
             width: 323,            
             title: "Recherche de parcelles",
             border: false,
             plain: true,
             region: 'center',
-            items: [_form],
-            bbar: _statusbar
+            items: [this.form],
+            bbar: this.statusbar
         });
-        _win.render(Ext.getBody());
-        _win.show();
-        _communesCombo.focus('', 50);
-        _self.win = _win;
-        _mask_loader = new Ext.LoadMask(_self.form.getEl().getAttribute("id"), {
+        this.win.render(Ext.getBody());
+        this.win.show();
+        this._communesCombo.focus('', 50);        
+        this._mask_loader = new Ext.LoadMask(this.form.getEl().getAttribute("id"), {
             msg: "Chargement..."
         });
-        if (_communes.data.length === 0) {
-            getCommunes();
+        if (this._communes.data.length === 0) {
+            this.getCommunes();
         }
-    };
+    },
 
-    return {
-        /*
-         * Public
-         */
-
-
-        init: function (record) {
-            _self = this;
+    init: function (record) {            
             var lang = OpenLayers.Lang.getCode();
-            title = record.get("title")[lang];
-            _map = this.map;            
-            _parcelLayer = new OpenLayers.Layer.Vector("parcel2", {
+            this.title = record.get("title")[lang];                  
+            this._parcelLayer = new OpenLayers.Layer.Vector("parcel2", {
                 displayInLayerSwitcher: false
             });
-            this.layer = _parcelLayer;
-            _config = _self.options;
-            _communesRequestType = _config.communes.requesttype;
+            this.layer = this._parcelLayer;            
+            this._communesRequestType = this.options.communes.requesttype;
             var description = record.get("description")[lang];
-            if (_config.proxy) {
-                OpenLayers.ProxyHost = _config.proxy;
+            if (this.options.proxy) {
+                OpenLayers.ProxyHost = this.options.proxy;
             }
-            _parcelLayer.setZIndex(1000);
-            this.map.addLayers([_parcelLayer]);
-            _communes = new Ext.data.JsonStore({
+            this._parcelLayer.setZIndex(1000);
+            this.map.addLayers([this._parcelLayer]);
+            this._communes = new Ext.data.JsonStore({
                 fields: [{
-                    name: _config.communes.idfield,
-                    mapping: 'properties.' + _config.communes.idfield
+                    name: this.options.communes.idfield,
+                    mapping: 'properties.' + this.options.communes.idfield
                 }, {
-                    name: _config.communes.labelfield,
-                    mapping: 'properties.' + _config.communes.labelfield
+                    name: this.options.communes.labelfield,
+                    mapping: 'properties.' + this.options.communes.labelfield
                 }],
                 sortInfo: {
-                    field: _config.communes.labelfield,
+                    field: this.options.communes.labelfield,
                     direction: 'ASC'
                 }
             });
             var menuitems = new Ext.menu.Item({
-                text: title,
+                text: this.title,
                 iconCls: 'cadastre2-icon',
                 qtip: description,
                 listeners: {
@@ -342,30 +326,21 @@ GEOR.Addons.cadastre.prototype = (function () {
                         });
                     },
                     click: function () {
-                        showForm();
+                        this.showForm();
                     },
                     scope: this
-                }/*,
-                menu: new Ext.menu.Menu({
-                    items: [{
-                        text: _config.subtitle[lang],
-                        handler: function () {
-                            showForm();
-                        }
-                    }]
-                })*/
+                }
             });
             this.item = menuitems;
             return menuitems;
         },
-        destroy: function () {
-            this.map = null;
-            this.options = null;
+        
+        destroy: function () {            
             this.item = null;
             this.layer.destroy();
             this.form.destroy();
             this.win.destroy();
             this.statusbar.destroy();
-        }
-    }
-})();
+            GEOR.Addons.Base.prototype.destroy.call(this);
+        }    
+});
